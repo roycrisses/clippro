@@ -19,14 +19,36 @@ public partial class App : Application
     public static ClipboardMonitor? ClipboardMonitor { get; private set; }
     private bool _startMinimized;
 
+    private static readonly string LogPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.Desktop), 
+        "ClipboardPro_Log.txt");
+
     public App()
     {
+        Log("=== Application Starting ===");
+        Log($"Time: {DateTime.Now}");
+        Log($"OS: {Environment.OSVersion}");
+        Log($".NET Version: {Environment.Version}");
+        Log($"Process Path: {Environment.ProcessPath}");
+        Log($"Current Directory: {Environment.CurrentDirectory}");
+        
         DispatcherUnhandledException += App_DispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+        Log("Exception handlers registered");
+    }
+
+    private static void Log(string message)
+    {
+        try
+        {
+            File.AppendAllText(LogPath, $"[{DateTime.Now:HH:mm:ss.fff}] {message}\n");
+        }
+        catch { /* Ignore logging failures */ }
     }
 
     private void App_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
     {
+        Log($"DISPATCHER EXCEPTION: {e.Exception}");
         LogError(e.Exception, "DispatcherUnhandledException");
         e.Handled = true; // Prevent crash if possible
         Shutdown(1);
@@ -34,6 +56,7 @@ public partial class App : Application
 
     private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
+        Log($"APPDOMAIN EXCEPTION: {e.ExceptionObject}");
         LogError(e.ExceptionObject as Exception, "AppDomain.UnhandledException");
     }
 
@@ -65,36 +88,51 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        Log("OnStartup() called");
         base.OnStartup(e);
 
         // Check if started with --minimized argument (from Windows Startup)
         _startMinimized = e.Args.Contains("--minimized");
+        Log($"Start minimized: {_startMinimized}");
 
         try
         {
             // Initialize settings
+            Log("Loading settings...");
             SettingsService.Load();
+            Log("Settings loaded");
 
             // Initialize database
+            Log("Initializing database...");
             InitializeDatabase();
+            Log("Database initialized");
 
             // Initialize ViewModel
+            Log("Creating MainViewModel...");
             MainViewModel = new MainViewModel(_dbContext!);
+            Log("MainViewModel created");
 
             // Enable startup on first run
+            Log("Checking startup registration...");
             if (!StartupManager.IsStartupEnabled())
             {
                 StartupManager.SetStartupEnabled(true);
+                Log("Startup enabled");
             }
 
             // Initialize system tray icon
+            Log("Initializing notify icon...");
             InitializeNotifyIcon();
+            Log("Notify icon initialized");
 
             // Show onboarding if first run
+            Log($"IsFirstRun: {SettingsService.Settings.IsFirstRun}");
             if (SettingsService.Settings.IsFirstRun)
             {
+                Log("Showing onboarding window...");
                 var onboarding = new Views.OnboardingWindow();
                 onboarding.ShowDialog();
+                Log("Onboarding closed");
                 
                 SettingsService.Settings.IsFirstRun = false;
                 SettingsService.Save();
