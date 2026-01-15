@@ -1,0 +1,18 @@
+﻿  Determining projects to restore...
+  Restored D:\zz\clipboard pro\src\ClipboardPro\ClipboardPro.csproj (in 495 ms).
+D:\zz\clipboard pro\src\ClipboardPro\App.xaml.cs(14,31): warning CS0649: Field 'App._clipboardMonitor' is never assigned to, and will always have its default value null [D:\zz\clipboard pro\src\ClipboardPro\ClipboardPro_uxxmo5ye_wpftmp.csproj]
+D:\zz\clipboard pro\src\ClipboardPro\App.xaml.cs(208,32): warning CS0067: The event 'RelayCommand.CanExecuteChanged' is never used [D:\zz\clipboard pro\src\ClipboardPro\ClipboardPro_uxxmo5ye_wpftmp.csproj]
+D:\zz\clipboard pro\src\ClipboardPro\App.xaml.cs(14,31): warning CS0649: Field 'App._clipboardMonitor' is never assigned to, and will always have its default value null [D:\zz\clipboard pro\src\ClipboardPro\ClipboardPro.csproj]
+D:\zz\clipboard pro\src\ClipboardPro\App.xaml.cs(208,32): warning CS0067: The event 'RelayCommand.CanExecuteChanged' is never used [D:\zz\clipboard pro\src\ClipboardPro\ClipboardPro.csproj]
+  ClipboardPro -> D:\zz\clipboard pro\src\ClipboardPro\bin\Release\net8.0-windows\ClipboardPro.dll
+
+Build succeeded.
+
+D:\zz\clipboard pro\src\ClipboardPro\App.xaml.cs(14,31): warning CS0649: Field 'App._clipboardMonitor' is never assigned to, and will always have its default value null [D:\zz\clipboard pro\src\ClipboardPro\ClipboardPro_uxxmo5ye_wpftmp.csproj]
+D:\zz\clipboard pro\src\ClipboardPro\App.xaml.cs(208,32): warning CS0067: The event 'RelayCommand.CanExecuteChanged' is never used [D:\zz\clipboard pro\src\ClipboardPro\ClipboardPro_uxxmo5ye_wpftmp.csproj]
+D:\zz\clipboard pro\src\ClipboardPro\App.xaml.cs(14,31): warning CS0649: Field 'App._clipboardMonitor' is never assigned to, and will always have its default value null [D:\zz\clipboard pro\src\ClipboardPro\ClipboardPro.csproj]
+D:\zz\clipboard pro\src\ClipboardPro\App.xaml.cs(208,32): warning CS0067: The event 'RelayCommand.CanExecuteChanged' is never used [D:\zz\clipboard pro\src\ClipboardPro\ClipboardPro.csproj]
+    4 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:04.74

@@ -1,0 +1,4 @@
+﻿  Determining projects to restore...
+  All projects are up-to-date for restore.
+  ClipboardPro -> D:\zz\clipboard pro\src\ClipboardPro\bin\Release\net8.0-windows\win-x64\ClipboardPro.dll
+  ClipboardPro -> D:\zz\clipboard pro\publish-standalone\

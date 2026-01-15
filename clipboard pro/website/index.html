@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clipboard Pro - The Ultimate Workflow Tool</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@300;500;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="assets/icon.png">
+</head>
+
+<body>
+    <div class="noise-overlay"></div>
+    <div class="glow-spot top-center"></div>
+
+    <nav>
+        <div class="logo">
+            <img src="assets/icon.png" alt="Clipboard Pro">
+            <span>Clipboard Pro</span>
+        </div>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#download" class="btn-nav">Download</a>
+        </div>
+    </nav>
+
+    <main>
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-content">
+                <div class="badge">Generation 3.0</div>
+                <h1>Master Your<br><span class="gradient-text">Clipboard</span></h1>
+                <p class="subtitle">The cinematic, cross-platform clipboard manager for power users. Organize, search,
+                    and paste with unparalleled speed on Windows, macOS, and Linux.</p>
+
+                <div class="cta-group">
+                    <a href="downloads/ClipboardPro-Windows.exe" class="btn-primary" download>
+                        <span>Get Started</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M7 17L17 7M17 7H7M17 7V17" />
+                        </svg>
+                    </a>
+                    <a href="https://github.com/roycrisses" class="btn-secondary">View Source</a>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="app-card glass">
+                    <!-- Abstract representation of the UI -->
+                    <div class="ui-header">
+                        <div class="dots"><span></span><span></span><span></span></div>
+                        <div class="search-bar"></div>
+                    </div>
+                    <div class="ui-grid">
+                        <div class="ui-item active"></div>
+                        <div class="ui-item"></div>
+                        <div class="ui-item"></div>
+                        <div class="ui-item"></div>
+                    </div>
+                    <div class="glow-effect"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Download Section -->
+        <section id="download" class="downloads">
+            <h2 class="section-title">Select Your Platform</h2>
+            <div class="bento-grid-3">
+                <!-- Windows -->
+                <div class="card glass">
+                    <div class="icon-wrapper win">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M0 3.449L9.75 2.1v9.451H0v-8.1zm10.949-1.551L24 0v11.023h-13.051V1.898zm-10.949 9.954H9.75v8.322l-9.75-1.352v-6.97zm10.949 0h13.051v10.375L10.949 21.898V11.852z" />
+                        </svg>
+                    </div>
+                    <h3>Windows</h3>
+                    <p>Windows 10 / 11 (x64)</p>
+                    <a href="downloads/ClipboardPro-Windows.exe" class="btn-download" download>Download .exe</a>
+                    <div
+                        style="margin-top: 15px; font-size: 0.85em; opacity: 0.8; padding: 10px; background: rgba(255,255,0,0.1); border-radius: 6px; border-left: 3px solid #FFD700;">
+                        <strong>Installation Note:</strong> If you see "Windows protected your PC", click <em>More
+                            info</em> → <em>Run anyway</em>.
+                        <br><a href="#"
+                            onclick="alert('Since this is an open-source project without a paid certificate, Microsoft SmartScreen may flag it initially. This is normal safely click Run Anyway to proceed.')"
+                            style="color: #FFD700; text-decoration: underline; margin-top: 5px; display: inline-block;">Learn
+                            Why</a>
+                    </div>
+                </div>
+
+                <!-- Mac -->
+                <div class="card glass">
+                    <div class="icon-wrapper mac">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.8-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.21-1.98 1.07-3.11-1.04.05-2.29.69-3.02 1.55-.65.75-1.21 1.95-1.06 3.04 1.15.09 2.33-.64 3.01-1.48" />
+                        </svg>
+                    </div>
+                    <h3>macOS</h3>
+                    <p>Universal (Intel & Apple Silicon)</p>
+                    <a href="downloads/ClipboardPro-macOS.dmg" class="btn-download" download>Download .dmg</a>
+                </div>
+
+                <!-- Linux -->
+                <div class="card glass">
+                    <div class="icon-wrapper linux">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M21.6 15.6l-1.8-8.1c-0.5-2.1-2.2-3.8-4.3-4.1C13.6 3.1 11.2 3.5 9.4 4.8l-0.3 0.2c-0.1 0.1-0.3 0.1-0.4 0L8.6 4.9C7.4 4.3 6.1 4.1 4.8 4.4C2.5 4.9 0.8 6.9 0.8 9.2v9c0 2.3 1.7 4.3 3.9 4.8 0.4 0.1 0.7 0.1 1.1 0.1 1.8 0 3.4-1.1 4.1-2.7l0.2-0.6c0.1-0.2 0.4-0.3 0.6-0.2 1.5 0.5 3.2 0.3 4.6-0.6l0.3-0.2c0.1-0.1 0.3-0.1 0.4 0 0.1 0.1 0.2 0.2 0.2 0.3l1.8 8.1c0.5 2.1 2.2 3.8 4.3 4.1 0.4 0.1 0.8 0.1 1.2 0.1 1.8 0 3.5-1.1 4.2-2.7l0-0.1C23.9 19.3 23.3 17 21.6 15.6z" />
+                        </svg>
+                    </div>
+                    <h3>Linux</h3>
+                    <p>AppImage / .deb / .rpm</p>
+                    <a href="downloads/ClipboardPro-Linux.AppImage" class="btn-download" download>Download .AppImage</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features -->
+        <section id="features" class="features">
+            <h2 class="section-title">Why Clipboard Pro?</h2>
+
+            <div class="bento-grid-2">
+                <div class="card glass large">
+                    <h3>Cross-Platform Sync</h3>
+                    <p>Your clipboard follows you. Seamlessly sync clips between your Windows PC, MacBook, and Linux
+                        workstation in real-time.</p>
+                </div>
+                <div class="card glass">
+                    <h3>Smart Search</h3>
+                    <p>Find that snippet from last week instantly with fuzzy search and type-filtering.</p>
+                </div>
+                <div class="card glass">
+                    <h3>Developer First</h3>
+                    <p>Format detection for hex codes, JSON, and links. Dark mode native.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Clipboard Pro. Created by <a href="https://roycrisses.github.io/Krishna-portfolio/"
+                style="color: inherit; text-decoration: underline;">Mr. Krishna Karki</a>.</p>
+        <div class="links">
+            <a href="#">Privacy</a>
+            <a href="#">Terms</a>
+            <a href="https://github.com/roycrisses">GitHub</a>
+        </div>
+    </footer>
+</body>
+
+</html>

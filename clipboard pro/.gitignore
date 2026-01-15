@@ -1,0 +1,29 @@
+# Build outputs
+bin/
+obj/
+publish/
+publish-standalone/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Dependencies
+packages/
+
+# Database (local data)
+*.db
+*.db-shm
+*.db-wal
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Large Binaries
+website/downloads/*.exe
+website/downloads/*.dmg
+website/downloads/*.AppImage
