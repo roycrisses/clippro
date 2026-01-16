@@ -1,0 +1,54 @@
+<Window x:Class="ClipboardPro.Views.AddProjectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Create New Project"
+        Height="180"
+        Width="350"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent">
+
+    <Border Background="#1A1A1A" 
+            BorderBrush="#333" 
+            BorderThickness="1" 
+            CornerRadius="12" 
+            Padding="16">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Text="Create New Project" 
+                       Foreground="White" 
+                       FontSize="16" 
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,16"/>
+
+            <ui:TextBox x:Name="ProjectNameBox" 
+                        Grid.Row="1"
+                        PlaceholderText="Project name..."
+                        VerticalAlignment="Center"
+                        FocusManager.FocusedElement="{Binding RelativeSource={RelativeSource Self}}"/>
+
+            <StackPanel Grid.Row="2" 
+                        Orientation="Horizontal" 
+                        HorizontalAlignment="Right"
+                        Margin="0,16,0,0">
+                <ui:Button Content="Cancel" 
+                           Appearance="Secondary" 
+                           Width="70"
+                           Click="Cancel_Click"/>
+                <ui:Button Content="Create" 
+                           Appearance="Primary" 
+                           Width="70" 
+                           Margin="8,0,0,0"
+                           Click="Create_Click"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

@@ -21,7 +21,7 @@
         <local:BoolToVisibilityConverter x:Key="BoolToVisConverter"/>
     </ui:FluentWindow.Resources>
 
-    <Grid>
+    <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -320,7 +320,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </ScrollViewer>
-            </Grid>
         </Grid>
+    </Grid>
     </Grid>
 </ui:FluentWindow>

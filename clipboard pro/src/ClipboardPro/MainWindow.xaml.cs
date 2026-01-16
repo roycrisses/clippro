@@ -118,23 +118,12 @@ public partial class MainWindow : FluentWindow
     // Project actions
     private async void AddProject_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new ContentDialog
+        var dialog = new Views.AddProjectWindow();
+        dialog.Owner = this;
+        
+        if (dialog.ShowDialog() == true)
         {
-            Title = "Create New Project",
-            PrimaryButtonText = "Create",
-            CloseButtonText = "Cancel"
-        };
-
-        var textBox = new Wpf.Ui.Controls.TextBox
-        {
-            PlaceholderText = "Project name..."
-        };
-        dialog.Content = textBox;
-
-        var result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.Primary && !string.IsNullOrWhiteSpace(textBox.Text))
-        {
-            await _viewModel.CreateProjectCommand.ExecuteAsync(textBox.Text);
+            await _viewModel.CreateProjectCommand.ExecuteAsync(dialog.ProjectName);
         }
     }
 
