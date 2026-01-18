@@ -130,7 +130,7 @@ public partial class MainWindow : FluentWindow
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error creating project: {ex.Message}\n\n{ex.StackTrace}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            System.Windows.MessageBox.Show($"Error creating project: {ex.Message}\n\n{ex.StackTrace}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
         }
     }
 

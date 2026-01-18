@@ -70,6 +70,26 @@ public partial class MainViewModel : ObservableObject
         LockedProject = await _dbContext.Projects.FirstOrDefaultAsync(p => p.IsLocked);
     }
 
+    private async Task SafeSaveChangesAsync()
+    {
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Concurrency error means the record is already deleted or modified.
+            // For this app, we can safely ignore it or reload.
+            // We'll clear the change tracker to avoid persistent errors.
+            _dbContext.ChangeTracker.Clear();
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Database Save Error: {ex.Message}");
+        }
+    }
+
     [RelayCommand]
     private async Task RefreshAsync()
     {
@@ -123,7 +143,7 @@ public partial class MainViewModel : ObservableObject
             
             // Update timestamp
             clipping.Timestamp = DateTime.Now;
-            await _dbContext.SaveChangesAsync();
+            await SafeSaveChangesAsync();
         }
         catch (Exception ex)
         {
@@ -135,15 +155,23 @@ public partial class MainViewModel : ObservableObject
     private async Task ToggleFavoriteAsync(Clipping clipping)
     {
         clipping.IsFavorite = !clipping.IsFavorite;
-        await _dbContext.SaveChangesAsync();
+        await SafeSaveChangesAsync();
     }
 
     [RelayCommand]
     private async Task DeleteClippingAsync(Clipping clipping)
     {
-        _dbContext.Clippings.Remove(clipping);
-        await _dbContext.SaveChangesAsync();
-        Clippings.Remove(clipping);
+        try
+        {
+            _dbContext.Clippings.Remove(clipping);
+            await SafeSaveChangesAsync();
+            Clippings.Remove(clipping);
+        }
+        catch
+        {
+            // Ignore if already deleted
+            Clippings.Remove(clipping);
+        }
     }
 
     [RelayCommand]
@@ -154,7 +182,7 @@ public partial class MainViewModel : ObservableObject
 
         var project = new Project { Name = name };
         _dbContext.Projects.Add(project);
-        await _dbContext.SaveChangesAsync();
+        await SafeSaveChangesAsync();
         Projects.Add(project);
     }
 
@@ -178,21 +206,21 @@ public partial class MainViewModel : ObservableObject
             LockedProject = null;
         }
 
-        await _dbContext.SaveChangesAsync();
+        await SafeSaveChangesAsync();
     }
 
     [RelayCommand]
     private async Task AddToProjectAsync((Clipping clipping, Project project) args)
     {
         args.clipping.ProjectId = args.project.Id;
-        await _dbContext.SaveChangesAsync();
+        await SafeSaveChangesAsync();
     }
 
     [RelayCommand]
     private async Task DeleteProjectAsync(Project project)
     {
         _dbContext.Projects.Remove(project);
-        await _dbContext.SaveChangesAsync();
+        await SafeSaveChangesAsync();
         Projects.Remove(project);
         
         if (LockedProject?.Id == project.Id)
