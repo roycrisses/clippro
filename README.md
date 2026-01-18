@@ -93,7 +93,9 @@ graph TD
 ## Installation
 
 ### Option 1: Download (Recommended)
-Visit our [Official Website](https://clippro.netlify.app/) to download the latest Windows installer.
+Visit our [Official Website](https://clippro.netlify.app/) or download directly:
+
+[![Download for Windows](https://img.shields.io/badge/Download_Latest_Build-Windows_x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://clippro.netlify.app/downloads/ClipboardPro-Windows.zip)
 
 > **Note on SmartScreen**: Since this is an open-source beta project, Windows SmartScreen may flag the installer. Click **"More Info" -> "Run Anyway"** to install. Providing a code-signing certificate is on our roadmap!
 
