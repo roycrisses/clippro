@@ -118,12 +118,19 @@ public partial class MainWindow : FluentWindow
     // Project actions
     private async void AddProject_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new Views.AddProjectWindow();
-        dialog.Owner = this;
-        
-        if (dialog.ShowDialog() == true)
+        try
         {
-            await _viewModel.CreateProjectCommand.ExecuteAsync(dialog.ProjectName);
+            var dialog = new Views.AddProjectWindow();
+            dialog.Owner = this;
+            
+            if (dialog.ShowDialog() == true)
+            {
+                await _viewModel.CreateProjectCommand.ExecuteAsync(dialog.ProjectName);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error creating project: {ex.Message}\n\n{ex.StackTrace}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
         }
     }
 

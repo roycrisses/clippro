@@ -10,9 +10,12 @@ namespace ClipboardPro;
 
 public partial class App : Application
 {
+
+#pragma warning disable 649
     private TaskbarIcon? _notifyIcon;
     private ClipboardMonitor? _clipboardMonitor;
     private AppDbContext? _dbContext;
+#pragma warning restore 649
     
     public static MainViewModel? MainViewModel { get; private set; }
     public static AppDbContext? DbContext { get; private set; }
@@ -287,5 +290,7 @@ public class RelayCommand : System.Windows.Input.ICommand
     
     public bool CanExecute(object? parameter) => true;
     public void Execute(object? parameter) => _execute();
+#pragma warning disable 67
     public event EventHandler? CanExecuteChanged;
+#pragma warning restore 67
 }
