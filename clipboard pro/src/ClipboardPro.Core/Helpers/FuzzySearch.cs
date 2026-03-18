@@ -23,6 +23,11 @@ public static class FuzzySearch
         if (ContainsInOrder(query, target))
             return 0.8;
 
+        // Skip Levenshtein for very long strings to maintain performance
+        // Clipboard contents can be very large, and O(N*M) is too slow here.
+        if (target.Length > 1000)
+            return 0;
+
         // Levenshtein distance based similarity
         var distance = LevenshteinDistance(query, target, isS1Lowered: true);
         var maxLength = Math.Max(query.Length, target.Length);
@@ -118,9 +123,18 @@ public static class FuzzySearch
         // Pre-lower query once to avoid repeated allocations in the loop
         string lowerQuery = query.ToLowerInvariant();
 
-        return items
-            .Select(item => new { Item = item, Score = GetSimilarityScore(lowerQuery, textSelector(item)) })
-            .Where(x => x.Score >= threshold)
+        // Use ValueTuple and explicit loop to avoid anonymous object allocations and LINQ overhead
+        var results = new List<(T Item, double Score)>();
+        foreach (var item in items)
+        {
+            double score = GetSimilarityScore(lowerQuery, textSelector(item));
+            if (score >= threshold)
+            {
+                results.Add((item, score));
+            }
+        }
+
+        return results
             .OrderByDescending(x => x.Score)
             .Select(x => x.Item);
     }
