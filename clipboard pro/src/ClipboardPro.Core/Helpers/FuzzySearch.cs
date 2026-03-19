@@ -23,6 +23,11 @@ public static class FuzzySearch
         if (ContainsInOrder(query, target))
             return 0.8;
 
+        // Performance Optimization: Skip Levenshtein distance for very large strings
+        // as it has O(N*M) complexity. 1000 characters is a safe threshold for UI responsiveness.
+        if (target.Length > 1000)
+            return 0;
+
         // Levenshtein distance based similarity
         var distance = LevenshteinDistance(query, target, isS1Lowered: true);
         var maxLength = Math.Max(query.Length, target.Length);
@@ -75,9 +80,10 @@ public static class FuzzySearch
         // Pre-lower s1 if not already lowered (or if it was swapped from s2)
         string s1Lower = (isS1Lowered && !swapped) ? s1 : s1.ToLowerInvariant();
 
-        // We only need two rows of the matrix
-        int[] prevRow = new int[m + 1];
-        int[] currRow = new int[m + 1];
+        // Use stackalloc for small strings to avoid heap allocations.
+        // 256 is a safe limit for stack size (257 * 4 bytes * 2 rows = ~2KB).
+        Span<int> prevRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
+        Span<int> currRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
 
         for (int i = 0; i <= m; i++) prevRow[i] = i;
 
@@ -118,9 +124,18 @@ public static class FuzzySearch
         // Pre-lower query once to avoid repeated allocations in the loop
         string lowerQuery = query.ToLowerInvariant();
 
-        return items
-            .Select(item => new { Item = item, Score = GetSimilarityScore(lowerQuery, textSelector(item)) })
-            .Where(x => x.Score >= threshold)
+        // Use ValueTuple and explicit loop to avoid heap allocations from anonymous types and LINQ overhead
+        var scoredItems = new List<(T Item, double Score)>();
+        foreach (var item in items)
+        {
+            var score = GetSimilarityScore(lowerQuery, textSelector(item));
+            if (score >= threshold)
+            {
+                scoredItems.Add((item, score));
+            }
+        }
+
+        return scoredItems
             .OrderByDescending(x => x.Score)
             .Select(x => x.Item);
     }
