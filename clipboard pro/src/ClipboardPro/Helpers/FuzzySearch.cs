@@ -23,6 +23,11 @@ public static class FuzzySearch
         if (ContainsInOrder(query, target))
             return 0.8;
 
+        // Performance Optimization: Skip expensive Levenshtein for very large strings
+        // Typically clipboard contents can be massive, so we cap this at 1000 chars.
+        if (target.Length > 1000)
+            return 0;
+
         // Levenshtein distance based similarity
         var distance = LevenshteinDistance(query, target, isS1Lowered: true);
         var maxLength = Math.Max(query.Length, target.Length);
@@ -75,9 +80,10 @@ public static class FuzzySearch
         // Pre-lower s1 if not already lowered (or if it was swapped from s2)
         string s1Lower = (isS1Lowered && !swapped) ? s1 : s1.ToLowerInvariant();
 
-        // We only need two rows of the matrix
-        int[] prevRow = new int[m + 1];
-        int[] currRow = new int[m + 1];
+        // Performance Optimization: Use stackalloc for small arrays to avoid heap allocation
+        // 256 is a safe threshold for stack allocation in most environments.
+        Span<int> prevRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
+        Span<int> currRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
 
         for (int i = 0; i <= m; i++) prevRow[i] = i;
 
@@ -94,8 +100,8 @@ public static class FuzzySearch
                     prevRow[i - 1] + cost);
             }
 
-            // Swap rows
-            var temp = prevRow;
+            // Performance Optimization: Swap spans (O(1)) instead of copying
+            Span<int> temp = prevRow;
             prevRow = currRow;
             currRow = temp;
         }
@@ -118,9 +124,19 @@ public static class FuzzySearch
         // Pre-lower query once to avoid repeated allocations in the loop
         string lowerQuery = query.ToLowerInvariant();
 
-        return items
-            .Select(item => new { Item = item, Score = GetSimilarityScore(lowerQuery, textSelector(item)) })
-            .Where(x => x.Score >= threshold)
+        // Performance Optimization: Use explicit loop and ValueTuple to avoid
+        // LINQ's anonymous object heap allocations and delegate overhead.
+        var results = new List<(T Item, double Score)>();
+        foreach (var item in items)
+        {
+            double score = GetSimilarityScore(lowerQuery, textSelector(item));
+            if (score >= threshold)
+            {
+                results.Add((item, score));
+            }
+        }
+
+        return results
             .OrderByDescending(x => x.Score)
             .Select(x => x.Item);
     }
