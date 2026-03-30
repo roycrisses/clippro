@@ -23,9 +23,14 @@ public static class FuzzySearch
         if (ContainsInOrder(query, target))
             return 0.8;
 
+        // Performance: Length-based fast-exit.
+        // If the length difference already exceeds what the threshold allows, skip Levenshtein.
+        int maxLength = Math.Max(query.Length, target.Length);
+        if (Math.Abs(query.Length - target.Length) > maxLength * 0.7)
+            return 0;
+
         // Levenshtein distance based similarity
         var distance = LevenshteinDistance(query, target, isS1Lowered: true);
-        var maxLength = Math.Max(query.Length, target.Length);
         var similarity = 1.0 - (double)distance / maxLength;
 
         return Math.Max(0, similarity);
@@ -75,9 +80,9 @@ public static class FuzzySearch
         // Pre-lower s1 if not already lowered (or if it was swapped from s2)
         string s1Lower = (isS1Lowered && !swapped) ? s1 : s1.ToLowerInvariant();
 
-        // We only need two rows of the matrix
-        int[] prevRow = new int[m + 1];
-        int[] currRow = new int[m + 1];
+        // Performance: Use stackalloc for small strings to avoid heap allocations
+        Span<int> prevRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
+        Span<int> currRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
 
         for (int i = 0; i <= m; i++) prevRow[i] = i;
 
@@ -89,9 +94,12 @@ public static class FuzzySearch
             for (int i = 1; i <= m; i++)
             {
                 int cost = s1Lower[i - 1] == s2Char ? 0 : 1;
-                currRow[i] = Math.Min(
-                    Math.Min(currRow[i - 1] + 1, prevRow[i] + 1),
-                    prevRow[i - 1] + cost);
+
+                int insert = currRow[i - 1] + 1;
+                int delete = prevRow[i] + 1;
+                int substitute = prevRow[i - 1] + cost;
+
+                currRow[i] = Math.Min(insert, Math.Min(delete, substitute));
             }
 
             // Swap rows
@@ -113,15 +121,33 @@ public static class FuzzySearch
         double threshold = 0.3)
     {
         if (string.IsNullOrWhiteSpace(query))
-            return items;
+        {
+            foreach (var item in items)
+                yield return item;
+            yield break;
+        }
 
         // Pre-lower query once to avoid repeated allocations in the loop
         string lowerQuery = query.ToLowerInvariant();
 
-        return items
-            .Select(item => new { Item = item, Score = GetSimilarityScore(lowerQuery, textSelector(item)) })
-            .Where(x => x.Score >= threshold)
-            .OrderByDescending(x => x.Score)
-            .Select(x => x.Item);
+        // Performance: Avoid LINQ and anonymous objects to reduce allocations
+        var results = new List<(T Item, double Score)>();
+
+        foreach (var item in items)
+        {
+            double score = GetSimilarityScore(lowerQuery, textSelector(item));
+            if (score >= threshold)
+            {
+                results.Add((item, score));
+            }
+        }
+
+        // Sort by score descending
+        results.Sort((x, y) => y.Score.CompareTo(x.Score));
+
+        foreach (var result in results)
+        {
+            yield return result.Item;
+        }
     }
 }
