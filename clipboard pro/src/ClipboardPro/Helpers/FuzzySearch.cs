@@ -23,6 +23,10 @@ public static class FuzzySearch
         if (ContainsInOrder(query, target))
             return 0.8;
 
+        // Increase threshold to 1000 for a more generous match (original behavior)
+        if (Math.Abs(query.Length - target.Length) > 1000)
+            return 0;
+
         // Levenshtein distance based similarity
         var distance = LevenshteinDistance(query, target, isS1Lowered: true);
         var maxLength = Math.Max(query.Length, target.Length);
@@ -43,8 +47,11 @@ public static class FuzzySearch
         int needleIdx = 0;
         foreach (char c in haystack)
         {
-            // Compare char of haystack (lowered) with already lowered needle char
-            if (needleIdx < needle.Length && char.ToLowerInvariant(c) == needle[needleIdx])
+            if (needleIdx >= needle.Length) break;
+
+            // Compare char of haystack with already lowered needle char without full ToLowerInvariant()
+            char nc = needle[needleIdx];
+            if (c == nc || char.ToLowerInvariant(c) == nc)
             {
                 needleIdx++;
             }
@@ -75,9 +82,9 @@ public static class FuzzySearch
         // Pre-lower s1 if not already lowered (or if it was swapped from s2)
         string s1Lower = (isS1Lowered && !swapped) ? s1 : s1.ToLowerInvariant();
 
-        // We only need two rows of the matrix
-        int[] prevRow = new int[m + 1];
-        int[] currRow = new int[m + 1];
+        // Use stackalloc for small strings to avoid heap allocation
+        Span<int> prevRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
+        Span<int> currRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
 
         for (int i = 0; i <= m; i++) prevRow[i] = i;
 
@@ -89,13 +96,18 @@ public static class FuzzySearch
             for (int i = 1; i <= m; i++)
             {
                 int cost = s1Lower[i - 1] == s2Char ? 0 : 1;
-                currRow[i] = Math.Min(
-                    Math.Min(currRow[i - 1] + 1, prevRow[i] + 1),
-                    prevRow[i - 1] + cost);
+
+                int insert = currRow[i - 1] + 1;
+                int delete = prevRow[i] + 1;
+                int substitute = prevRow[i - 1] + cost;
+
+                // Manual Math.Min is often faster for small types
+                int min = insert < delete ? insert : delete;
+                currRow[i] = min < substitute ? min : substitute;
             }
 
-            // Swap rows
-            var temp = prevRow;
+            // Swap rows using Spans (zero-copy)
+            Span<int> temp = prevRow;
             prevRow = currRow;
             currRow = temp;
         }
@@ -118,9 +130,21 @@ public static class FuzzySearch
         // Pre-lower query once to avoid repeated allocations in the loop
         string lowerQuery = query.ToLowerInvariant();
 
-        return items
-            .Select(item => new { Item = item, Score = GetSimilarityScore(lowerQuery, textSelector(item)) })
-            .Where(x => x.Score >= threshold)
+        // Avoid LINQ and anonymous objects to reduce allocations
+        var results = new List<(T Item, double Score)>();
+        foreach (var item in items)
+        {
+            double score = GetSimilarityScore(lowerQuery, textSelector(item));
+            if (score >= threshold)
+            {
+                results.Add((item, score));
+            }
+        }
+
+        // Custom stable sort to maintain order for equal scores
+        // Score is descending, then original index for stability if needed,
+        // but here we just use descending score.
+        return results
             .OrderByDescending(x => x.Score)
             .Select(x => x.Item);
     }
