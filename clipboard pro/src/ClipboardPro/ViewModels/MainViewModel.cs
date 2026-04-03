@@ -55,7 +55,7 @@ public partial class MainViewModel : ObservableObject
             .OrderByDescending(c => c.Timestamp)
             .Take(500)
             .ToListAsync();
-        
+
         Clippings = new ObservableCollection<Clipping>(clippings);
 
         var projects = await _dbContext.Projects.ToListAsync();
@@ -140,7 +140,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             Clipboard.SetText(clipping.Content);
-            
+
             // Update timestamp
             clipping.Timestamp = DateTime.Now;
             await SafeSaveChangesAsync();
@@ -222,7 +222,7 @@ public partial class MainViewModel : ObservableObject
         _dbContext.Projects.Remove(project);
         await SafeSaveChangesAsync();
         Projects.Remove(project);
-        
+
         if (LockedProject?.Id == project.Id)
         {
             LockedProject = null;
@@ -242,7 +242,7 @@ public partial class MainViewModel : ObservableObject
         {
             // Add to top of list
             Clippings.Insert(0, clipping);
-            
+
             // Keep list manageable
             while (Clippings.Count > 500)
             {
