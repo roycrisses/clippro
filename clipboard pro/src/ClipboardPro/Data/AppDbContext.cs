@@ -36,7 +36,7 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.ContentHash);
             entity.HasIndex(e => e.Timestamp);
             entity.HasIndex(e => e.SourceApp);
-            
+
             entity.HasOne(e => e.Project)
                   .WithMany(p => p.Clippings)
                   .HasForeignKey(e => e.ProjectId)
@@ -63,11 +63,11 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<ClippingTag>(entity =>
         {
             entity.HasKey(e => new { e.ClippingId, e.TagId });
-            
+
             entity.HasOne(e => e.Clipping)
                   .WithMany(c => c.ClippingTags)
                   .HasForeignKey(e => e.ClippingId);
-                  
+
             entity.HasOne(e => e.Tag)
                   .WithMany(t => t.ClippingTags)
                   .HasForeignKey(e => e.TagId);
