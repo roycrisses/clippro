@@ -23,6 +23,10 @@ public static class FuzzySearch
         if (ContainsInOrder(query, target))
             return 0.8;
 
+        // Optimization: For very large strings, skip Levenshtein if not already matched
+        if (target.Length > 1000)
+            return 0.1;
+
         // Levenshtein distance based similarity
         var distance = LevenshteinDistance(query, target, isS1Lowered: true);
         var maxLength = Math.Max(query.Length, target.Length);
@@ -75,9 +79,9 @@ public static class FuzzySearch
         // Pre-lower s1 if not already lowered (or if it was swapped from s2)
         string s1Lower = (isS1Lowered && !swapped) ? s1 : s1.ToLowerInvariant();
 
-        // We only need two rows of the matrix
-        int[] prevRow = new int[m + 1];
-        int[] currRow = new int[m + 1];
+        // Optimization: Use stackalloc for small strings to avoid heap allocation
+        Span<int> prevRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
+        Span<int> currRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
 
         for (int i = 0; i <= m; i++) prevRow[i] = i;
 
@@ -89,9 +93,20 @@ public static class FuzzySearch
             for (int i = 1; i <= m; i++)
             {
                 int cost = s1Lower[i - 1] == s2Char ? 0 : 1;
-                currRow[i] = Math.Min(
-                    Math.Min(currRow[i - 1] + 1, prevRow[i] + 1),
-                    prevRow[i - 1] + cost);
+
+                // Optimized min calculation
+                int a = currRow[i - 1] + 1;
+                int b = prevRow[i] + 1;
+                int c = prevRow[i - 1] + cost;
+
+                if (a < b)
+                {
+                    currRow[i] = a < c ? a : c;
+                }
+                else
+                {
+                    currRow[i] = b < c ? b : c;
+                }
             }
 
             // Swap rows
@@ -104,7 +119,8 @@ public static class FuzzySearch
     }
 
     /// <summary>
-    /// Filters and sorts items by fuzzy match score
+    /// Filters and sorts items by fuzzy match score.
+    /// Uses a manual loop and ValueTuple to reduce allocations and ensure a stable sort.
     /// </summary>
     public static IEnumerable<T> Search<T>(
         IEnumerable<T> items, 
@@ -113,15 +129,37 @@ public static class FuzzySearch
         double threshold = 0.3)
     {
         if (string.IsNullOrWhiteSpace(query))
-            return items;
+        {
+            foreach (var item in items) yield return item;
+            yield break;
+        }
 
         // Pre-lower query once to avoid repeated allocations in the loop
         string lowerQuery = query.ToLowerInvariant();
 
-        return items
-            .Select(item => new { Item = item, Score = GetSimilarityScore(lowerQuery, textSelector(item)) })
-            .Where(x => x.Score >= threshold)
-            .OrderByDescending(x => x.Score)
-            .Select(x => x.Item);
+        var results = new List<(T Item, double Score, int Index)>();
+        int index = 0;
+
+        foreach (var item in items)
+        {
+            double score = GetSimilarityScore(lowerQuery, textSelector(item));
+            if (score >= threshold)
+            {
+                results.Add((item, score, index));
+            }
+            index++;
+        }
+
+        // Stable sort: Score DESC, then Index ASC
+        results.Sort((a, b) =>
+        {
+            int scoreComparison = b.Score.CompareTo(a.Score);
+            return scoreComparison != 0 ? scoreComparison : a.Index.CompareTo(b.Index);
+        });
+
+        foreach (var result in results)
+        {
+            yield return result.Item;
+        }
     }
 }
