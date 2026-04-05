@@ -69,9 +69,9 @@ public static class NativeMethods
     public static extern IntPtr GetOpenClipboardWindow();
 
     // ========== Global Hotkey Support ==========
-    
+
     public const int WM_HOTKEY = 0x0312;
-    
+
     // Modifier keys
     public const uint MOD_ALT = 0x0001;
     public const uint MOD_CONTROL = 0x0002;

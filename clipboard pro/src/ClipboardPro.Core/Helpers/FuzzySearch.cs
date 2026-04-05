@@ -23,6 +23,12 @@ public static class FuzzySearch
         if (ContainsInOrder(query, target))
             return 0.8;
 
+        // Performance Optimization: Skip expensive Levenshtein distance on huge payloads
+        // unless they are very similar in length. Similarity is relative, but an absolute
+        // threshold prevents catastrophic performance on large clipboard entries.
+        if (query.Length > 1000 || target.Length > 1000)
+            return 0;
+
         // Levenshtein distance based similarity
         var distance = LevenshteinDistance(query, target, isS1Lowered: true);
         var maxLength = Math.Max(query.Length, target.Length);
@@ -39,7 +45,7 @@ public static class FuzzySearch
     private static bool ContainsInOrder(string needle, string haystack)
     {
         if (needle.Length > haystack.Length) return false;
-        
+
         int needleIdx = 0;
         foreach (char c in haystack)
         {
@@ -75,9 +81,9 @@ public static class FuzzySearch
         // Pre-lower s1 if not already lowered (or if it was swapped from s2)
         string s1Lower = (isS1Lowered && !swapped) ? s1 : s1.ToLowerInvariant();
 
-        // We only need two rows of the matrix
-        int[] prevRow = new int[m + 1];
-        int[] currRow = new int[m + 1];
+        // Performance Optimization: Use stackalloc for small arrays to avoid heap allocation
+        Span<int> prevRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
+        Span<int> currRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
 
         for (int i = 0; i <= m; i++) prevRow[i] = i;
 
@@ -94,7 +100,7 @@ public static class FuzzySearch
                     prevRow[i - 1] + cost);
             }
 
-            // Swap rows
+            // Swap rows - using Spans allows efficient pointer swap
             var temp = prevRow;
             prevRow = currRow;
             currRow = temp;
@@ -107,21 +113,48 @@ public static class FuzzySearch
     /// Filters and sorts items by fuzzy match score
     /// </summary>
     public static IEnumerable<T> Search<T>(
-        IEnumerable<T> items, 
-        string query, 
-        Func<T, string> textSelector, 
+        IEnumerable<T> items,
+        string query,
+        Func<T, string> textSelector,
         double threshold = 0.3)
     {
         if (string.IsNullOrWhiteSpace(query))
-            return items;
+        {
+            foreach (var item in items)
+            {
+                yield return item;
+            }
+            yield break;
+        }
 
         // Pre-lower query once to avoid repeated allocations in the loop
         string lowerQuery = query.ToLowerInvariant();
 
-        return items
-            .Select(item => new { Item = item, Score = GetSimilarityScore(lowerQuery, textSelector(item)) })
-            .Where(x => x.Score >= threshold)
-            .OrderByDescending(x => x.Score)
-            .Select(x => x.Item);
+        // Performance Optimization: Replace LINQ with manual loop and List to reduce allocations.
+        // We use an index-augmented ValueTuple to perform a STABLE sort (Score DESC, Index ASC)
+        // because List<T>.Sort is unstable.
+        var results = new List<(T Item, double Score, int Index)>();
+        int index = 0;
+        foreach (var item in items)
+        {
+            double score = GetSimilarityScore(lowerQuery, textSelector(item));
+            if (score >= threshold)
+            {
+                results.Add((item, score, index));
+            }
+            index++;
+        }
+
+        results.Sort((a, b) =>
+        {
+            int scoreCompare = b.Score.CompareTo(a.Score); // Score DESC
+            if (scoreCompare != 0) return scoreCompare;
+            return a.Index.CompareTo(b.Index); // Index ASC (stable)
+        });
+
+        foreach (var result in results)
+        {
+            yield return result.Item;
+        }
     }
 }

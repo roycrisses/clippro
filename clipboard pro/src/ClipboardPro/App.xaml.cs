@@ -16,14 +16,14 @@ public partial class App : Application
     private ClipboardMonitor? _clipboardMonitor;
     private AppDbContext? _dbContext;
 #pragma warning restore 649
-    
+
     public static MainViewModel? MainViewModel { get; private set; }
     public static AppDbContext? DbContext { get; private set; }
     public static ClipboardMonitor? ClipboardMonitor { get; private set; }
     private bool _startMinimized;
 
     private static readonly string LogPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.Desktop), 
+        Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
         "ClipboardPro_Log.txt");
 
     public App()
@@ -34,7 +34,7 @@ public partial class App : Application
         Log($".NET Version: {Environment.Version}");
         Log($"Process Path: {Environment.ProcessPath}");
         Log($"Current Directory: {Environment.CurrentDirectory}");
-        
+
         DispatcherUnhandledException += App_DispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
         Log("Exception handlers registered");
@@ -70,7 +70,7 @@ public partial class App : Application
         try
         {
             var logContent = $"[{DateTime.Now}] [{source}] Critical Error:\n{ex}\n\nInner: {ex.InnerException}\nStack: {ex.StackTrace}\n\n";
-            
+
             // Try AppData first
             var appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClipboardPro", "crash.log");
             var dir = Path.GetDirectoryName(appDataPath);
@@ -136,14 +136,14 @@ public partial class App : Application
                 var onboarding = new Views.OnboardingWindow();
                 onboarding.ShowDialog();
                 Log("Onboarding closed");
-                
+
                 SettingsService.Settings.IsFirstRun = false;
                 SettingsService.Save();
             }
 
             // Create main window (hidden if started minimized)
             MainWindow = new MainWindow();
-            
+
             if (!_startMinimized)
             {
                 MainWindow.Show();
@@ -177,7 +177,7 @@ public partial class App : Application
     private void InitializeNotifyIcon()
     {
         System.Drawing.Icon? icon = null;
-        
+
         try
         {
             var iconStream = Application.GetResourceStream(
@@ -207,7 +207,7 @@ public partial class App : Application
     private System.Windows.Controls.ContextMenu CreateContextMenu()
     {
         var menu = new System.Windows.Controls.ContextMenu();
-        
+
         var openItem = new System.Windows.Controls.MenuItem { Header = "Open ClipBoard Pro" };
         openItem.Click += (s, e) => ShowMainWindow();
         menu.Items.Add(openItem);
@@ -233,7 +233,7 @@ public partial class App : Application
                 "Clear History",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
-            
+
             if (result == MessageBoxResult.Yes && MainViewModel != null)
             {
                 await MainViewModel.ClearAllClippingsAsync();
@@ -285,9 +285,9 @@ public partial class App : Application
 public class RelayCommand : System.Windows.Input.ICommand
 {
     private readonly Action _execute;
-    
+
     public RelayCommand(Action execute) => _execute = execute;
-    
+
     public bool CanExecute(object? parameter) => true;
     public void Execute(object? parameter) => _execute();
 #pragma warning disable 67

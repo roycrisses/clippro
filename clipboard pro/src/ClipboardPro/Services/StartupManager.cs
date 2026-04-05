@@ -41,7 +41,7 @@ public static class StartupManager
                 // Get the current executable path
                 var exePath = Environment.ProcessPath;
                 if (string.IsNullOrEmpty(exePath)) return false;
-                
+
                 // Add --minimized argument for silent startup
                 key.SetValue(APP_NAME, $"\"{exePath}\" --minimized");
             }

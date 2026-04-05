@@ -21,7 +21,7 @@ public static class SourceAppDetector
                 return "Unknown";
 
             NativeMethods.GetWindowThreadProcessId(hwnd, out uint processId);
-            
+
             if (processId == 0)
                 return "Unknown";
 
@@ -69,7 +69,7 @@ public static class SourceAppDetector
     {
         if (string.IsNullOrEmpty(input))
             return input;
-        
+
         return char.ToUpper(input[0]) + input[1..];
     }
 
