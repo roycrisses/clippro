@@ -43,6 +43,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isMonitoringPaused;
 
+    private CancellationTokenSource? _searchCancellationTokenSource;
+
     public MainViewModel(AppDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -98,40 +100,82 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSearchQueryChanged(string value)
     {
-        ApplyFilters();
+        _searchCancellationTokenSource?.Cancel();
+        _searchCancellationTokenSource = new CancellationTokenSource();
+        var token = _searchCancellationTokenSource.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                // Debounce delay
+                await Task.Delay(300, token);
+                await ApplyFiltersAsync(token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Ignore cancellation
+            }
+        }, token);
     }
 
-    private async void ApplyFilters()
+    private void ApplyFilters()
     {
-        var query = _dbContext.Clippings.AsQueryable();
+        _searchCancellationTokenSource?.Cancel();
+        _searchCancellationTokenSource = new CancellationTokenSource();
+        _ = ApplyFiltersAsync(_searchCancellationTokenSource.Token);
+    }
 
-        // Apply filter - extract values before using in LINQ
-        if (SelectedFilter == "Favorites")
+    private async Task ApplyFiltersAsync(CancellationToken token)
+    {
+        try
         {
-            query = query.Where(c => c.IsFavorite);
-        }
-        else if (SelectedFilter.StartsWith("App:"))
-        {
-            var appName = SelectedFilter.Substring(4);
-            query = query.Where(c => c.SourceApp == appName);
-        }
-        else if (SelectedFilter.StartsWith("Project:") && int.TryParse(SelectedFilter.Substring(8), out int projId))
-        {
-            query = query.Where(c => c.ProjectId == projId);
-        }
+            var query = _dbContext.Clippings.AsQueryable();
 
-        var clippings = await query
-            .OrderByDescending(c => c.Timestamp)
-            .Take(500)
-            .ToListAsync();
+            // Apply filter
+            if (SelectedFilter == "Favorites")
+            {
+                query = query.Where(c => c.IsFavorite);
+            }
+            else if (SelectedFilter.StartsWith("App:"))
+            {
+                var appName = SelectedFilter.Substring(4);
+                query = query.Where(c => c.SourceApp == appName);
+            }
+            else if (SelectedFilter.StartsWith("Project:") && int.TryParse(SelectedFilter.Substring(8), out int projId))
+            {
+                query = query.Where(c => c.ProjectId == projId);
+            }
 
-        // Apply fuzzy search
-        if (!string.IsNullOrWhiteSpace(SearchQuery))
-        {
-            clippings = FuzzySearch.Search(clippings, SearchQuery, c => c.Content).ToList();
+            var clippings = await query
+                .OrderByDescending(c => c.Timestamp)
+                .Take(500)
+                .ToListAsync(token);
+
+            if (token.IsCancellationRequested) return;
+
+            // Apply fuzzy search on background thread
+            if (!string.IsNullOrWhiteSpace(SearchQuery))
+            {
+                clippings = FuzzySearch.Search(clippings, SearchQuery, c => c.Content).ToList();
+            }
+
+            if (token.IsCancellationRequested) return;
+
+            // Update UI on the main thread
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                Clippings = new ObservableCollection<Clipping>(clippings);
+            });
         }
-
-        Clippings = new ObservableCollection<Clipping>(clippings);
+        catch (OperationCanceledException)
+        {
+            // Ignore cancellation
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Search error: {ex.Message}");
+        }
     }
 
     [RelayCommand]
