@@ -23,9 +23,16 @@ public static class FuzzySearch
         if (ContainsInOrder(query, target))
             return 0.8;
 
+        // Optimization: if length difference is too high, it can't possibly be a good match.
+        // Similarity threshold is 0.3, so distance must be <= 0.7 * maxLength.
+        // Since distance is at least the length difference, we can skip if diff > 0.7 * maxLength.
+        int maxLength = Math.Max(query.Length, target.Length);
+        int diff = Math.Abs(query.Length - target.Length);
+        if (diff > maxLength * 0.7)
+            return 0;
+
         // Levenshtein distance based similarity
         var distance = LevenshteinDistance(query, target, isS1Lowered: true);
-        var maxLength = Math.Max(query.Length, target.Length);
         var similarity = 1.0 - (double)distance / maxLength;
 
         return Math.Max(0, similarity);
@@ -39,7 +46,7 @@ public static class FuzzySearch
     private static bool ContainsInOrder(string needle, string haystack)
     {
         if (needle.Length > haystack.Length) return false;
-        
+
         int needleIdx = 0;
         foreach (char c in haystack)
         {
@@ -75,9 +82,9 @@ public static class FuzzySearch
         // Pre-lower s1 if not already lowered (or if it was swapped from s2)
         string s1Lower = (isS1Lowered && !swapped) ? s1 : s1.ToLowerInvariant();
 
-        // We only need two rows of the matrix
-        int[] prevRow = new int[m + 1];
-        int[] currRow = new int[m + 1];
+        // We only need two rows of the matrix. Use stackalloc for small strings to avoid heap allocations.
+        Span<int> prevRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
+        Span<int> currRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
 
         for (int i = 0; i <= m; i++) prevRow[i] = i;
 
@@ -89,9 +96,12 @@ public static class FuzzySearch
             for (int i = 1; i <= m; i++)
             {
                 int cost = s1Lower[i - 1] == s2Char ? 0 : 1;
-                currRow[i] = Math.Min(
-                    Math.Min(currRow[i - 1] + 1, prevRow[i] + 1),
-                    prevRow[i - 1] + cost);
+
+                // Optimized Math.Min for 3 values
+                int min = currRow[i - 1] + 1;
+                if (prevRow[i] + 1 < min) min = prevRow[i] + 1;
+                if (prevRow[i - 1] + cost < min) min = prevRow[i - 1] + cost;
+                currRow[i] = min;
             }
 
             // Swap rows
@@ -104,24 +114,54 @@ public static class FuzzySearch
     }
 
     /// <summary>
-    /// Filters and sorts items by fuzzy match score
+    /// Filters and sorts items by fuzzy match score. Use manual loop and stable sort to reduce allocations.
     /// </summary>
     public static IEnumerable<T> Search<T>(
-        IEnumerable<T> items, 
-        string query, 
-        Func<T, string> textSelector, 
+        IEnumerable<T> items,
+        string query,
+        Func<T, string> textSelector,
         double threshold = 0.3)
     {
         if (string.IsNullOrWhiteSpace(query))
-            return items;
+        {
+            foreach (var item in items)
+            {
+                yield return item;
+            }
+            yield break;
+        }
 
         // Pre-lower query once to avoid repeated allocations in the loop
         string lowerQuery = query.ToLowerInvariant();
 
-        return items
-            .Select(item => new { Item = item, Score = GetSimilarityScore(lowerQuery, textSelector(item)) })
-            .Where(x => x.Score >= threshold)
-            .OrderByDescending(x => x.Score)
-            .Select(x => x.Item);
+        // Use a manual loop to filter items, reducing allocations from LINQ.
+        // Also capture the original index to ensure a stable sort when scores are equal.
+        // Pre-allocate the list if we can determine the capacity to avoid resizing allocations.
+        int capacity = items is System.Collections.ICollection collection ? collection.Count : 0;
+        var results = new List<(T Item, double Score, int Index)>(capacity);
+
+        int index = 0;
+        foreach (var item in items)
+        {
+            double score = GetSimilarityScore(lowerQuery, textSelector(item));
+            if (score >= threshold)
+            {
+                results.Add((item, score, index));
+            }
+            index++;
+        }
+
+        // Stable sort: Sort by Score DESC, then by original Index ASC
+        results.Sort((a, b) =>
+        {
+            int scoreCompare = b.Score.CompareTo(a.Score);
+            if (scoreCompare != 0) return scoreCompare;
+            return a.Index.CompareTo(b.Index);
+        });
+
+        foreach (var result in results)
+        {
+            yield return result.Item;
+        }
     }
 }
