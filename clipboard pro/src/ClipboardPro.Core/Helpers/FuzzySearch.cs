@@ -23,9 +23,15 @@ public static class FuzzySearch
         if (ContainsInOrder(query, target))
             return 0.8;
 
+        // Length-ratio heuristic: if the length difference is too large, it can't meet the 0.3 threshold
+        // (1 - diff/max) >= 0.3  => diff/max <= 0.7 => diff <= max * 0.7
+        int maxLength = Math.Max(query.Length, target.Length);
+        int diff = Math.Abs(query.Length - target.Length);
+        if (diff > maxLength * 0.7)
+            return 0;
+
         // Levenshtein distance based similarity
         var distance = LevenshteinDistance(query, target, isS1Lowered: true);
-        var maxLength = Math.Max(query.Length, target.Length);
         var similarity = 1.0 - (double)distance / maxLength;
 
         return Math.Max(0, similarity);
@@ -75,9 +81,9 @@ public static class FuzzySearch
         // Pre-lower s1 if not already lowered (or if it was swapped from s2)
         string s1Lower = (isS1Lowered && !swapped) ? s1 : s1.ToLowerInvariant();
 
-        // We only need two rows of the matrix
-        int[] prevRow = new int[m + 1];
-        int[] currRow = new int[m + 1];
+        // Use stackalloc for small strings to avoid heap allocations
+        Span<int> prevRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
+        Span<int> currRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
 
         for (int i = 0; i <= m; i++) prevRow[i] = i;
 
@@ -118,10 +124,36 @@ public static class FuzzySearch
         // Pre-lower query once to avoid repeated allocations in the loop
         string lowerQuery = query.ToLowerInvariant();
 
-        return items
-            .Select(item => new { Item = item, Score = GetSimilarityScore(lowerQuery, textSelector(item)) })
-            .Where(x => x.Score >= threshold)
-            .OrderByDescending(x => x.Score)
-            .Select(x => x.Item);
+        // Use a manual loop and a List with stable sort to reduce allocations and maintain order
+        var results = items is System.Collections.Generic.ICollection<T> coll
+            ? new System.Collections.Generic.List<(T Item, double Score, int Index)>(coll.Count)
+            : new System.Collections.Generic.List<(T Item, double Score, int Index)>();
+
+        int index = 0;
+        foreach (var item in items)
+        {
+            double score = GetSimilarityScore(lowerQuery, textSelector(item));
+            if (score >= threshold)
+            {
+                results.Add((item, score, index));
+            }
+            index++;
+        }
+
+        // Stable sort: Score descending, then original Index ascending
+        results.Sort((a, b) =>
+        {
+            int scoreCompare = b.Score.CompareTo(a.Score);
+            if (scoreCompare != 0) return scoreCompare;
+            return a.Index.CompareTo(b.Index);
+        });
+
+        // Convert to list of items to avoid yield return with early return conflict
+        var finalResults = new System.Collections.Generic.List<T>(results.Count);
+        foreach (var result in results)
+        {
+            finalResults.Add(result.Item);
+        }
+        return finalResults;
     }
 }
