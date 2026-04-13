@@ -17,6 +17,7 @@ public partial class MainViewModel : ObservableObject
     private readonly AppDbContext _dbContext;
     private readonly IClipboardService _clipboardService;
     private readonly IDispatcherService _dispatcherService;
+    private CancellationTokenSource? _searchCts;
 
     [ObservableProperty]
     private ObservableCollection<Clipping> _clippings = new();
@@ -82,10 +83,28 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSearchQueryChanged(string value)
     {
-        ApplyFilters();
+        _ = ApplyFiltersDebouncedAsync();
     }
 
-    private async void ApplyFilters()
+    private async Task ApplyFiltersDebouncedAsync()
+    {
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
+
+        try
+        {
+            // 300ms debounce to avoid excessive DB/CPU work during typing
+            await Task.Delay(300, token);
+            await ApplyFiltersAsync(token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Ignore cancellation
+        }
+    }
+
+    private async Task ApplyFiltersAsync(CancellationToken token)
     {
         var query = _dbContext.Clippings.AsQueryable();
 
@@ -104,16 +123,22 @@ public partial class MainViewModel : ObservableObject
             query = query.Where(c => c.ProjectId == projId);
         }
 
+        // Use the cancellation token for the database query
         var clippings = await query
             .OrderByDescending(c => c.Timestamp)
             .Take(500)
-            .ToListAsync();
+            .ToListAsync(token);
+
+        if (token.IsCancellationRequested) return;
 
         // Apply fuzzy search
         if (!string.IsNullOrWhiteSpace(SearchQuery))
         {
+            // Fuzzy search can be expensive on large payloads; honor cancellation
             clippings = FuzzySearch.Search(clippings, SearchQuery, c => c.Content).ToList();
         }
+
+        if (token.IsCancellationRequested) return;
 
         Clippings = new ObservableCollection<Clipping>(clippings);
     }
@@ -236,6 +261,6 @@ public partial class MainViewModel : ObservableObject
     public void SetFilter(string filter)
     {
         SelectedFilter = filter;
-        ApplyFilters();
+        _ = ApplyFiltersAsync(CancellationToken.None);
     }
 }
