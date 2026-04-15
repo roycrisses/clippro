@@ -10,7 +10,8 @@ public static class FuzzySearch
     /// </summary>
     /// <param name="query">The search query (MUST be pre-lowered for performance)</param>
     /// <param name="target">The string to search within</param>
-    public static double GetSimilarityScore(string query, string target)
+    /// <param name="threshold">The minimum similarity threshold to avoid expensive calculations</param>
+    public static double GetSimilarityScore(string query, string target, double threshold = 0.3)
     {
         if (string.IsNullOrEmpty(query) || string.IsNullOrEmpty(target))
             return 0;
@@ -23,10 +24,20 @@ public static class FuzzySearch
         if (ContainsInOrder(query, target))
             return 0.8;
 
+        // Early exit: if the length difference is already greater than what's allowed by the threshold,
+        // we can skip Levenshtein.
+        // similarity = 1 - distance / maxLen >= threshold => distance / maxLen <= 1 - threshold
+        int qLen = query.Length;
+        int tLen = target.Length;
+        int maxLen = Math.Max(qLen, tLen);
+        int minDistance = Math.Abs(qLen - tLen);
+
+        if ((double)minDistance / maxLen > (1.0 - threshold))
+            return 0;
+
         // Levenshtein distance based similarity
         var distance = LevenshteinDistance(query, target, isS1Lowered: true);
-        var maxLength = Math.Max(query.Length, target.Length);
-        var similarity = 1.0 - (double)distance / maxLength;
+        var similarity = 1.0 - (double)distance / maxLen;
 
         return Math.Max(0, similarity);
     }
@@ -41,16 +52,24 @@ public static class FuzzySearch
         if (needle.Length > haystack.Length) return false;
         
         int needleIdx = 0;
-        foreach (char c in haystack)
+        int needleLen = needle.Length;
+        int haystackLen = haystack.Length;
+
+        for (int i = 0; i < haystackLen; i++)
         {
-            // Compare char of haystack (lowered) with already lowered needle char
-            if (needleIdx < needle.Length && char.ToLowerInvariant(c) == needle[needleIdx])
+            // Early exit: if remaining haystack is shorter than remaining needle
+            if (haystackLen - i < needleLen - needleIdx)
+                return false;
+
+            if (char.ToLowerInvariant(haystack[i]) == needle[needleIdx])
             {
                 needleIdx++;
+                if (needleIdx == needleLen)
+                    return true;
             }
         }
 
-        return needleIdx == needle.Length;
+        return false;
     }
 
     /// <summary>
@@ -75,9 +94,10 @@ public static class FuzzySearch
         // Pre-lower s1 if not already lowered (or if it was swapped from s2)
         string s1Lower = (isS1Lowered && !swapped) ? s1 : s1.ToLowerInvariant();
 
-        // We only need two rows of the matrix
-        int[] prevRow = new int[m + 1];
-        int[] currRow = new int[m + 1];
+        // We only need two rows of the matrix. Use stackalloc for small strings to avoid heap allocations.
+        const int StackAllocThreshold = 256;
+        Span<int> prevRow = m < StackAllocThreshold ? stackalloc int[m + 1] : new int[m + 1];
+        Span<int> currRow = m < StackAllocThreshold ? stackalloc int[m + 1] : new int[m + 1];
 
         for (int i = 0; i <= m; i++) prevRow[i] = i;
 
@@ -113,15 +133,41 @@ public static class FuzzySearch
         double threshold = 0.3)
     {
         if (string.IsNullOrWhiteSpace(query))
-            return items;
+        {
+            foreach (var item in items)
+            {
+                yield return item;
+            }
+            yield break;
+        }
 
         // Pre-lower query once to avoid repeated allocations in the loop
         string lowerQuery = query.ToLowerInvariant();
 
-        return items
-            .Select(item => new { Item = item, Score = GetSimilarityScore(lowerQuery, textSelector(item)) })
-            .Where(x => x.Score >= threshold)
-            .OrderByDescending(x => x.Score)
-            .Select(x => x.Item);
+        // Avoid LINQ for performance and to ensure stable sort (original order for same scores)
+        var results = new List<(T Item, double Score, int Index)>();
+        int index = 0;
+        foreach (var item in items)
+        {
+            double score = GetSimilarityScore(lowerQuery, textSelector(item), threshold);
+            if (score >= threshold)
+            {
+                results.Add((item, score, index));
+            }
+            index++;
+        }
+
+        // Sort by Score DESC, then Index ASC (stable sort)
+        results.Sort((a, b) =>
+        {
+            int scoreComparison = b.Score.CompareTo(a.Score);
+            if (scoreComparison != 0) return scoreComparison;
+            return a.Index.CompareTo(b.Index);
+        });
+
+        foreach (var result in results)
+        {
+            yield return result.Item;
+        }
     }
 }
