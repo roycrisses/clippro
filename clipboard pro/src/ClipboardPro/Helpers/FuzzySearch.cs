@@ -1,3 +1,8 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+
 namespace ClipboardPro.Helpers;
 
 /// <summary>
@@ -10,7 +15,8 @@ public static class FuzzySearch
     /// </summary>
     /// <param name="query">The search query (MUST be pre-lowered for performance)</param>
     /// <param name="target">The string to search within</param>
-    public static double GetSimilarityScore(string query, string target)
+    /// <param name="threshold">Optional threshold to skip expensive calculations if they can't meet it</param>
+    public static double GetSimilarityScore(string query, string target, double threshold = 0)
     {
         if (string.IsNullOrEmpty(query) || string.IsNullOrEmpty(target))
             return 0;
@@ -23,10 +29,20 @@ public static class FuzzySearch
         if (ContainsInOrder(query, target))
             return 0.8;
 
+        // Optimization: if length difference is too large, it can't meet the threshold
+        // distance >= |len1 - len2|
+        // similarity = 1 - distance / maxLen <= 1 - |len1 - len2| / maxLen
+        // If 1 - |len1 - len2| / maxLen < threshold, we can skip.
+        int len1 = query.Length;
+        int len2 = target.Length;
+        int maxLen = Math.Max(len1, len2);
+        int diff = Math.Abs(len1 - len2);
+        if (threshold > 0 && 1.0 - (double)diff / maxLen < threshold)
+            return 0;
+
         // Levenshtein distance based similarity
         var distance = LevenshteinDistance(query, target, isS1Lowered: true);
-        var maxLength = Math.Max(query.Length, target.Length);
-        var similarity = 1.0 - (double)distance / maxLength;
+        var similarity = 1.0 - (double)distance / maxLen;
 
         return Math.Max(0, similarity);
     }
@@ -75,9 +91,9 @@ public static class FuzzySearch
         // Pre-lower s1 if not already lowered (or if it was swapped from s2)
         string s1Lower = (isS1Lowered && !swapped) ? s1 : s1.ToLowerInvariant();
 
-        // We only need two rows of the matrix
-        int[] prevRow = new int[m + 1];
-        int[] currRow = new int[m + 1];
+        // Use stackalloc for small strings to avoid heap allocation
+        Span<int> prevRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
+        Span<int> currRow = m < 256 ? stackalloc int[m + 1] : new int[m + 1];
 
         for (int i = 0; i <= m; i++) prevRow[i] = i;
 
@@ -113,15 +129,42 @@ public static class FuzzySearch
         double threshold = 0.3)
     {
         if (string.IsNullOrWhiteSpace(query))
-            return items;
+        {
+            foreach (var item in items)
+                yield return item;
+            yield break;
+        }
 
         // Pre-lower query once to avoid repeated allocations in the loop
         string lowerQuery = query.ToLowerInvariant();
 
-        return items
-            .Select(item => new { Item = item, Score = GetSimilarityScore(lowerQuery, textSelector(item)) })
-            .Where(x => x.Score >= threshold)
-            .OrderByDescending(x => x.Score)
-            .Select(x => x.Item);
+        // Optimization: Use a manual loop instead of LINQ to reduce allocations and allow for a stable sort
+        var results = items is ICollection collection
+            ? new List<(T Item, double Score, int Index)>(collection.Count)
+            : new List<(T Item, double Score, int Index)>();
+
+        int index = 0;
+        foreach (var item in items)
+        {
+            double score = GetSimilarityScore(lowerQuery, textSelector(item), threshold);
+            if (score >= threshold)
+            {
+                results.Add((item, score, index));
+            }
+            index++;
+        }
+
+        // Stable sort: primary by Score descending, secondary by Index ascending
+        results.Sort((a, b) =>
+        {
+            int scoreCompare = b.Score.CompareTo(a.Score);
+            if (scoreCompare != 0) return scoreCompare;
+            return a.Index.CompareTo(b.Index);
+        });
+
+        foreach (var result in results)
+        {
+            yield return result.Item;
+        }
     }
 }
