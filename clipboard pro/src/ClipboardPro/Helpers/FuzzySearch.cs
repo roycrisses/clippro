@@ -10,7 +10,8 @@ public static class FuzzySearch
     /// </summary>
     /// <param name="query">The search query (MUST be pre-lowered for performance)</param>
     /// <param name="target">The string to search within</param>
-    public static double GetSimilarityScore(string query, string target)
+    /// <param name="threshold">Minimum similarity threshold to consider (used for early exit)</param>
+    public static double GetSimilarityScore(string query, string target, double threshold = 0)
     {
         if (string.IsNullOrEmpty(query) || string.IsNullOrEmpty(target))
             return 0;
@@ -22,6 +23,15 @@ public static class FuzzySearch
         // Check if all characters of query appear in order in target
         if (ContainsInOrder(query, target))
             return 0.8;
+
+        // Early exit: if the strings are too different in length, they can't possibly meet the threshold
+        if (threshold > 0)
+        {
+            int lenDiff = Math.Abs(query.Length - target.Length);
+            int maxLen = Math.Max(query.Length, target.Length);
+            if (1.0 - (double)lenDiff / maxLen < threshold)
+                return 0;
+        }
 
         // Levenshtein distance based similarity
         var distance = LevenshteinDistance(query, target, isS1Lowered: true);
@@ -39,7 +49,7 @@ public static class FuzzySearch
     private static bool ContainsInOrder(string needle, string haystack)
     {
         if (needle.Length > haystack.Length) return false;
-        
+
         int needleIdx = 0;
         foreach (char c in haystack)
         {
@@ -75,9 +85,11 @@ public static class FuzzySearch
         // Pre-lower s1 if not already lowered (or if it was swapped from s2)
         string s1Lower = (isS1Lowered && !swapped) ? s1 : s1.ToLowerInvariant();
 
-        // We only need two rows of the matrix
-        int[] prevRow = new int[m + 1];
-        int[] currRow = new int[m + 1];
+        // Use stackalloc for small strings to avoid heap allocations
+        int[]? prevRowArr = null;
+        int[]? currRowArr = null;
+        Span<int> prevRow = m < 256 ? stackalloc int[m + 1] : (prevRowArr = new int[m + 1]);
+        Span<int> currRow = m < 256 ? stackalloc int[m + 1] : (currRowArr = new int[m + 1]);
 
         for (int i = 0; i <= m; i++) prevRow[i] = i;
 
@@ -107,21 +119,47 @@ public static class FuzzySearch
     /// Filters and sorts items by fuzzy match score
     /// </summary>
     public static IEnumerable<T> Search<T>(
-        IEnumerable<T> items, 
-        string query, 
-        Func<T, string> textSelector, 
+        IEnumerable<T> items,
+        string query,
+        Func<T, string> textSelector,
         double threshold = 0.3)
     {
         if (string.IsNullOrWhiteSpace(query))
-            return items;
+        {
+            foreach (var item in items)
+            {
+                yield return item;
+            }
+            yield break;
+        }
 
         // Pre-lower query once to avoid repeated allocations in the loop
         string lowerQuery = query.ToLowerInvariant();
 
-        return items
-            .Select(item => new { Item = item, Score = GetSimilarityScore(lowerQuery, textSelector(item)) })
-            .Where(x => x.Score >= threshold)
-            .OrderByDescending(x => x.Score)
-            .Select(x => x.Item);
+        // Use a manual loop and a list with ValueTuple to avoid LINQ overhead and multiple allocations
+        var results = new System.Collections.Generic.List<(T Item, double Score, int Index)>();
+        int index = 0;
+        foreach (var item in items)
+        {
+            double score = GetSimilarityScore(lowerQuery, textSelector(item), threshold);
+            if (score >= threshold)
+            {
+                results.Add((item, score, index));
+            }
+            index++;
+        }
+
+        // Perform a stable sort: primary by score (descending), secondary by original index (ascending)
+        results.Sort((a, b) =>
+        {
+            int scoreCompare = b.Score.CompareTo(a.Score);
+            if (scoreCompare != 0) return scoreCompare;
+            return a.Index.CompareTo(b.Index);
+        });
+
+        foreach (var result in results)
+        {
+            yield return result.Item;
+        }
     }
 }

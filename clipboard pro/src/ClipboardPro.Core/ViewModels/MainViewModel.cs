@@ -45,6 +45,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isMonitoringPaused;
 
+    private CancellationTokenSource? _filterCts;
+
     public MainViewModel(AppDbContext dbContext, IClipboardService clipboardService, IDispatcherService dispatcherService)
     {
         _dbContext = dbContext;
@@ -59,7 +61,7 @@ public partial class MainViewModel : ObservableObject
             .OrderByDescending(c => c.Timestamp)
             .Take(500)
             .ToListAsync();
-        
+
         Clippings = new ObservableCollection<Clipping>(clippings);
 
         var projects = await _dbContext.Projects.ToListAsync();
@@ -82,40 +84,67 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSearchQueryChanged(string value)
     {
-        ApplyFilters();
+        _ = ApplyFiltersAsync();
     }
 
-    private async void ApplyFilters()
+    private async Task ApplyFiltersAsync()
     {
-        var query = _dbContext.Clippings.AsQueryable();
+        // Cancel previous filter task
+        _filterCts?.Cancel();
+        _filterCts?.Dispose();
+        _filterCts = new CancellationTokenSource();
+        var token = _filterCts.Token;
 
-        // Apply filter - extract values before using in LINQ
-        if (SelectedFilter == "Favorites")
+        try
         {
-            query = query.Where(c => c.IsFavorite);
-        }
-        else if (SelectedFilter.StartsWith("App:"))
-        {
-            var appName = SelectedFilter.Substring(4);
-            query = query.Where(c => c.SourceApp == appName);
-        }
-        else if (SelectedFilter.StartsWith("Project:") && int.TryParse(SelectedFilter.Substring(8), out int projId))
-        {
-            query = query.Where(c => c.ProjectId == projId);
-        }
+            // Debounce for 300ms
+            await Task.Delay(300, token);
 
-        var clippings = await query
-            .OrderByDescending(c => c.Timestamp)
-            .Take(500)
-            .ToListAsync();
+            var query = _dbContext.Clippings.AsQueryable();
 
-        // Apply fuzzy search
-        if (!string.IsNullOrWhiteSpace(SearchQuery))
-        {
-            clippings = FuzzySearch.Search(clippings, SearchQuery, c => c.Content).ToList();
+            // Apply filter - extract values before using in LINQ
+            if (SelectedFilter == "Favorites")
+            {
+                query = query.Where(c => c.IsFavorite);
+            }
+            else if (SelectedFilter.StartsWith("App:"))
+            {
+                var appName = SelectedFilter.Substring(4);
+                query = query.Where(c => c.SourceApp == appName);
+            }
+            else if (SelectedFilter.StartsWith("Project:") && int.TryParse(SelectedFilter.Substring(8), out int projId))
+            {
+                query = query.Where(c => c.ProjectId == projId);
+            }
+
+            var clippings = await query
+                .OrderByDescending(c => c.Timestamp)
+                .Take(500)
+                .ToListAsync(token);
+
+            // Apply fuzzy search
+            if (!string.IsNullOrWhiteSpace(SearchQuery))
+            {
+                // FuzzySearch.Search is synchronous but optimized.
+                // We wrap it in Task.Run to keep UI responsive if it ever becomes slow for larger sets.
+                var searchQueryLocal = SearchQuery;
+                clippings = await Task.Run(() =>
+                    FuzzySearch.Search(clippings, searchQueryLocal, c => c.Content).ToList(), token);
+            }
+
+            if (!token.IsCancellationRequested)
+            {
+                Clippings = new ObservableCollection<Clipping>(clippings);
+            }
         }
-
-        Clippings = new ObservableCollection<Clipping>(clippings);
+        catch (OperationCanceledException)
+        {
+            // Expected
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Filter error: {ex.Message}");
+        }
     }
 
     [RelayCommand]
@@ -124,7 +153,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await _clipboardService.SetTextAsync(clipping.Content);
-            
+
             // Update timestamp
             clipping.Timestamp = DateTime.Now;
             await _dbContext.SaveChangesAsync();
@@ -198,7 +227,7 @@ public partial class MainViewModel : ObservableObject
         _dbContext.Projects.Remove(project);
         await _dbContext.SaveChangesAsync();
         Projects.Remove(project);
-        
+
         if (LockedProject?.Id == project.Id)
         {
             LockedProject = null;
@@ -218,7 +247,7 @@ public partial class MainViewModel : ObservableObject
         {
             // Add to top of list
             Clippings.Insert(0, clipping);
-            
+
             // Keep list manageable
             while (Clippings.Count > 500)
             {
@@ -236,6 +265,6 @@ public partial class MainViewModel : ObservableObject
     public void SetFilter(string filter)
     {
         SelectedFilter = filter;
-        ApplyFilters();
+        _ = ApplyFiltersAsync();
     }
 }

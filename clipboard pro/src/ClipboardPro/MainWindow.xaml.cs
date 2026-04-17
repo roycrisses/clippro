@@ -122,7 +122,7 @@ public partial class MainWindow : FluentWindow
         {
             var dialog = new Views.AddProjectWindow();
             dialog.Owner = this;
-            
+
             if (dialog.ShowDialog() == true)
             {
                 await _viewModel.CreateProjectCommand.ExecuteAsync(dialog.ProjectName);
@@ -187,7 +187,7 @@ public class BoolToVisibilityConverter : IValueConverter
         {
             return value is true ? "⭐" : "☆";
         }
-        
+
         return value switch
         {
             bool b => b ? Visibility.Visible : Visibility.Collapsed,

@@ -34,13 +34,13 @@ public class ClipboardMonitor : IDisposable
     public ClipboardMonitor(Window window, AppDbContext dbContext)
     {
         _dbContext = dbContext;
-        
+
         var helper = new WindowInteropHelper(window);
-        _hwndSource = HwndSource.FromHwnd(helper.Handle) 
+        _hwndSource = HwndSource.FromHwnd(helper.Handle)
             ?? throw new InvalidOperationException("Failed to get HwndSource");
-        
+
         _hwndSource.AddHook(WndProc);
-        
+
         if (!NativeMethods.AddClipboardFormatListener(helper.Handle))
         {
             throw new InvalidOperationException("Failed to add clipboard format listener");
@@ -92,7 +92,7 @@ public class ClipboardMonitor : IDisposable
             var contentHash = ComputeHash(content);
             var now = DateTime.Now;
 
-            if (contentHash == _lastContentHash && 
+            if (contentHash == _lastContentHash &&
                 (now - _lastCopyTime).TotalMilliseconds < 500)
             {
                 return; // Skip duplicate
@@ -129,7 +129,7 @@ public class ClipboardMonitor : IDisposable
             // Auto-assign to locked project if any
             var lockedProject = await _dbContext.Projects
                 .FirstOrDefaultAsync(p => p.IsLocked);
-            
+
             if (lockedProject != null)
             {
                 clipping.ProjectId = lockedProject.Id;
