@@ -43,6 +43,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isMonitoringPaused;
 
+    private CancellationTokenSource? _searchCts;
+
     public MainViewModel(AppDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -98,40 +100,75 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSearchQueryChanged(string value)
     {
-        ApplyFilters();
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                // 300ms debounce to prevent excessive DB queries and CPU usage during rapid typing
+                await Task.Delay(300, token);
+                await ApplyFiltersAsync(token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Search was cancelled by a newer one, safe to ignore
+            }
+        }, token);
     }
 
-    private async void ApplyFilters()
+    private async Task ApplyFiltersAsync(CancellationToken ct)
     {
-        var query = _dbContext.Clippings.AsQueryable();
-
-        // Apply filter - extract values before using in LINQ
-        if (SelectedFilter == "Favorites")
+        try
         {
-            query = query.Where(c => c.IsFavorite);
-        }
-        else if (SelectedFilter.StartsWith("App:"))
-        {
-            var appName = SelectedFilter.Substring(4);
-            query = query.Where(c => c.SourceApp == appName);
-        }
-        else if (SelectedFilter.StartsWith("Project:") && int.TryParse(SelectedFilter.Substring(8), out int projId))
-        {
-            query = query.Where(c => c.ProjectId == projId);
-        }
+            var query = _dbContext.Clippings.AsQueryable();
 
-        var clippings = await query
-            .OrderByDescending(c => c.Timestamp)
-            .Take(500)
-            .ToListAsync();
+            // Apply filter - extract values before using in LINQ
+            if (SelectedFilter == "Favorites")
+            {
+                query = query.Where(c => c.IsFavorite);
+            }
+            else if (SelectedFilter.StartsWith("App:"))
+            {
+                var appName = SelectedFilter.Substring(4);
+                query = query.Where(c => c.SourceApp == appName);
+            }
+            else if (SelectedFilter.StartsWith("Project:") && int.TryParse(SelectedFilter.Substring(8), out int projId))
+            {
+                query = query.Where(c => c.ProjectId == projId);
+            }
 
-        // Apply fuzzy search
-        if (!string.IsNullOrWhiteSpace(SearchQuery))
-        {
-            clippings = FuzzySearch.Search(clippings, SearchQuery, c => c.Content).ToList();
+            // Execute DB query with cancellation support
+            var clippings = await query
+                .OrderByDescending(c => c.Timestamp)
+                .Take(500)
+                .ToListAsync(ct);
+
+            // Apply fuzzy search (CPU intensive)
+            if (!string.IsNullOrWhiteSpace(SearchQuery))
+            {
+                clippings = FuzzySearch.Search(clippings, SearchQuery, c => c.Content).ToList();
+            }
+
+            // Check cancellation before updating UI
+            ct.ThrowIfCancellationRequested();
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                Clippings = new ObservableCollection<Clipping>(clippings);
+            });
         }
-
-        Clippings = new ObservableCollection<Clipping>(clippings);
+        catch (OperationCanceledException)
+        {
+            // Search was cancelled, safe to ignore
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Search error: {ex.Message}");
+        }
     }
 
     [RelayCommand]
@@ -260,6 +297,9 @@ public partial class MainViewModel : ObservableObject
     public void SetFilter(string filter)
     {
         SelectedFilter = filter;
-        ApplyFilters();
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+        _searchCts = new CancellationTokenSource();
+        _ = ApplyFiltersAsync(_searchCts.Token);
     }
 }
