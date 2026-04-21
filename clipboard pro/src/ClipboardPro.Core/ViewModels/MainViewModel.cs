@@ -17,6 +17,7 @@ public partial class MainViewModel : ObservableObject
     private readonly AppDbContext _dbContext;
     private readonly IClipboardService _clipboardService;
     private readonly IDispatcherService _dispatcherService;
+    private CancellationTokenSource? _searchCts;
 
     [ObservableProperty]
     private ObservableCollection<Clipping> _clippings = new();
@@ -82,40 +83,72 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSearchQueryChanged(string value)
     {
-        ApplyFilters();
+        _ = ApplyFiltersAsync();
     }
 
-    private async void ApplyFilters()
+    private async Task ApplyFiltersAsync()
     {
-        var query = _dbContext.Clippings.AsQueryable();
+        // Cancel any pending search
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
 
-        // Apply filter - extract values before using in LINQ
-        if (SelectedFilter == "Favorites")
+        try
         {
-            query = query.Where(c => c.IsFavorite);
-        }
-        else if (SelectedFilter.StartsWith("App:"))
-        {
-            var appName = SelectedFilter.Substring(4);
-            query = query.Where(c => c.SourceApp == appName);
-        }
-        else if (SelectedFilter.StartsWith("Project:") && int.TryParse(SelectedFilter.Substring(8), out int projId))
-        {
-            query = query.Where(c => c.ProjectId == projId);
-        }
+            // Debounce to avoid rapid database/CPU operations
+            await Task.Delay(300, token);
 
-        var clippings = await query
-            .OrderByDescending(c => c.Timestamp)
-            .Take(500)
-            .ToListAsync();
+            var query = _dbContext.Clippings.AsQueryable();
 
-        // Apply fuzzy search
-        if (!string.IsNullOrWhiteSpace(SearchQuery))
-        {
-            clippings = FuzzySearch.Search(clippings, SearchQuery, c => c.Content).ToList();
+            // Capture current filter values to avoid thread-safety issues
+            string currentFilter = SelectedFilter;
+            string currentSearch = SearchQuery;
+
+            // Apply filter - extract values before using in LINQ
+            if (currentFilter == "Favorites")
+            {
+                query = query.Where(c => c.IsFavorite);
+            }
+            else if (currentFilter.StartsWith("App:"))
+            {
+                var appName = currentFilter.Substring(4);
+                query = query.Where(c => c.SourceApp == appName);
+            }
+            else if (currentFilter.StartsWith("Project:") && int.TryParse(currentFilter.Substring(8), out int projId))
+            {
+                query = query.Where(c => c.ProjectId == projId);
+            }
+
+            var clippings = await query
+                .OrderByDescending(c => c.Timestamp)
+                .Take(500)
+                .ToListAsync(token);
+
+            // Apply fuzzy search on a background thread if needed
+            if (!string.IsNullOrWhiteSpace(currentSearch))
+            {
+                clippings = await Task.Run(() =>
+                    FuzzySearch.Search(clippings, currentSearch, c => c.Content).ToList(),
+                    token);
+            }
+
+            if (!token.IsCancellationRequested)
+            {
+                _dispatcherService.Invoke(() =>
+                {
+                    Clippings = new ObservableCollection<Clipping>(clippings);
+                });
+            }
         }
-
-        Clippings = new ObservableCollection<Clipping>(clippings);
+        catch (OperationCanceledException)
+        {
+            // Ignore cancellation
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Search error: {ex.Message}");
+        }
     }
 
     [RelayCommand]
@@ -236,6 +269,6 @@ public partial class MainViewModel : ObservableObject
     public void SetFilter(string filter)
     {
         SelectedFilter = filter;
-        ApplyFilters();
+        _ = ApplyFiltersAsync();
     }
 }
