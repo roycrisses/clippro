@@ -60,10 +60,11 @@ public static class FuzzySearch
             if (needleIdx < needle.Length && char.ToLowerInvariant(c) == needle[needleIdx])
             {
                 needleIdx++;
+                if (needleIdx == needle.Length) return true;
             }
         }
 
-        return needleIdx == needle.Length;
+        return false;
     }
 
     /// <summary>
@@ -131,8 +132,15 @@ public static class FuzzySearch
         // Pre-lower query once to avoid repeated allocations in the loop
         string lowerQuery = query.ToLowerInvariant();
 
+        // Pre-allocate list capacity if possible to reduce GC pressure
+        int initialCapacity = items switch
+        {
+            ICollection<T> collection => collection.Count,
+            _ => 0
+        };
+
         // Use a manual loop and ValueTuple to avoid LINQ allocations and ensure stable sort
-        var results = new List<(T Item, double Score, int Index)>();
+        var results = new List<(T Item, double Score, int Index)>(initialCapacity);
         int index = 0;
 
         foreach (var item in items)
