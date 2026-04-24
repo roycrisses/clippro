@@ -5,3 +5,7 @@
 ## 2025-05-15 - [FuzzySearch Allocation and Performance]
 **Learning:** LINQ operations (`Select`, `Where`, `OrderByDescending`) and anonymous types in search loops cause significant heap allocations (~117KB per 500 items). Using `stackalloc` for small arrays and a manual loop with `ValueTuple` and `List.Sort` (incorporating original index for stability) can drastically reduce allocations and improve performance.
 **Action:** Replace LINQ with manual loops and `ValueTuple` for critical search paths; use `stackalloc` for temporary buffers in algorithms like Levenshtein distance.
+
+## 2026-04-24 - [Search Debouncing and Algorithm Robustness]
+**Learning:** When implementing early exits in algorithms like `ContainsInOrder`, always ensure robustness against empty queries to avoid `IndexOutOfRangeException`. Furthermore, when implementing debouncing in ViewModels, explicit disposal of `CancellationTokenSource` is necessary to prevent resource leaks during rapid user input.
+**Action:** Include guard clauses for edge cases in optimized algorithms and ensure proper lifecycle management for cancellation tokens.

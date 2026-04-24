@@ -51,19 +51,22 @@ public static class FuzzySearch
     /// <param name="haystack">The string to search within</param>
     private static bool ContainsInOrder(string needle, string haystack)
     {
+        if (string.IsNullOrEmpty(needle)) return true;
         if (needle.Length > haystack.Length) return false;
-        
+
         int needleIdx = 0;
         foreach (char c in haystack)
         {
             // Compare char of haystack (lowered) with already lowered needle char
-            if (needleIdx < needle.Length && char.ToLowerInvariant(c) == needle[needleIdx])
+            if (char.ToLowerInvariant(c) == needle[needleIdx])
             {
                 needleIdx++;
+                // Early exit as soon as all characters of query are found
+                if (needleIdx == needle.Length) return true;
             }
         }
 
-        return needleIdx == needle.Length;
+        return false;
     }
 
     /// <summary>
@@ -132,7 +135,10 @@ public static class FuzzySearch
         string lowerQuery = query.ToLowerInvariant();
 
         // Use a manual loop and ValueTuple to avoid LINQ allocations and ensure stable sort
-        var results = new List<(T Item, double Score, int Index)>();
+        // Pre-allocate list if count is known to reduce re-allocations
+        var results = items is System.Collections.ICollection collection
+            ? new List<(T Item, double Score, int Index)>(collection.Count)
+            : new List<(T Item, double Score, int Index)>();
         int index = 0;
 
         foreach (var item in items)
