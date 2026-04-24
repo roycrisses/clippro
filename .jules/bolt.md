@@ -5,3 +5,7 @@
 ## 2025-05-15 - [FuzzySearch Allocation and Performance]
 **Learning:** LINQ operations (`Select`, `Where`, `OrderByDescending`) and anonymous types in search loops cause significant heap allocations (~117KB per 500 items). Using `stackalloc` for small arrays and a manual loop with `ValueTuple` and `List.Sort` (incorporating original index for stability) can drastically reduce allocations and improve performance.
 **Action:** Replace LINQ with manual loops and `ValueTuple` for critical search paths; use `stackalloc` for temporary buffers in algorithms like Levenshtein distance.
+
+## 2026-04-24 - [Search UI Responsiveness and Algorithm Early Exit]
+**Learning:** Running fuzzy search on every keystroke blocks the UI thread and executes redundant calculations. `ContainsInOrder` subsequence matching can be optimized to exit as soon as a match is found. Using `Task.Delay` for debouncing and `CancellationTokenSource` for cancellation in MVVM prevents race conditions and UI lag.
+**Action:** Implement debouncing and async cancellation for search inputs; offload CPU-heavy filtering to `Task.Run`; add early returns to search algorithms.
