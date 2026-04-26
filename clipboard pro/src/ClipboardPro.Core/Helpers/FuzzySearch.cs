@@ -51,19 +51,25 @@ public static class FuzzySearch
     /// <param name="haystack">The string to search within</param>
     private static bool ContainsInOrder(string needle, string haystack)
     {
+        if (string.IsNullOrEmpty(needle)) return true;
         if (needle.Length > haystack.Length) return false;
+
+        ReadOnlySpan<char> haystackSpan = haystack.AsSpan();
         
-        int needleIdx = 0;
-        foreach (char c in haystack)
+        for (int i = 0; i < needle.Length; i++)
         {
-            // Compare char of haystack (lowered) with already lowered needle char
-            if (needleIdx < needle.Length && char.ToLowerInvariant(c) == needle[needleIdx])
-            {
-                needleIdx++;
-            }
+            char l = needle[i];
+            char u = char.ToUpperInvariant(l);
+
+            // Use IndexOfAny with both lower and upper case variants to avoid repeated ToLowerInvariant calls
+            // This also leverages vectorized search for performance
+            int foundIdx = haystackSpan.IndexOfAny(l, u);
+            if (foundIdx == -1) return false;
+
+            haystackSpan = haystackSpan.Slice(foundIdx + 1);
         }
 
-        return needleIdx == needle.Length;
+        return true;
     }
 
     /// <summary>
