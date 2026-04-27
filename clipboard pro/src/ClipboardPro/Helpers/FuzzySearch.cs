@@ -51,19 +51,26 @@ public static class FuzzySearch
     /// <param name="haystack">The string to search within</param>
     private static bool ContainsInOrder(string needle, string haystack)
     {
+        if (needle.Length == 0) return true;
         if (needle.Length > haystack.Length) return false;
-        
+
+        ReadOnlySpan<char> hSpan = haystack.AsSpan();
         int needleIdx = 0;
-        foreach (char c in haystack)
+
+        while (needleIdx < needle.Length)
         {
-            // Compare char of haystack (lowered) with already lowered needle char
-            if (needleIdx < needle.Length && char.ToLowerInvariant(c) == needle[needleIdx])
-            {
-                needleIdx++;
-            }
+            char c = needle[needleIdx];
+            char upperC = char.ToUpperInvariant(c);
+
+            // Use vectorized IndexOfAny to find next occurrence of either lower or upper case variant
+            int foundIdx = hSpan.IndexOfAny(c, upperC);
+            if (foundIdx == -1) return false;
+
+            needleIdx++;
+            hSpan = hSpan.Slice(foundIdx + 1);
         }
 
-        return needleIdx == needle.Length;
+        return true;
     }
 
     /// <summary>
@@ -119,20 +126,22 @@ public static class FuzzySearch
     /// <summary>
     /// Filters and sorts items by fuzzy match score
     /// </summary>
-    public static IEnumerable<T> Search<T>(
+    public static List<T> Search<T>(
         IEnumerable<T> items, 
         string query, 
         Func<T, string> textSelector, 
         double threshold = 0.3)
     {
         if (string.IsNullOrWhiteSpace(query))
-            return items;
+            return items.ToList();
 
         // Pre-lower query once to avoid repeated allocations in the loop
         string lowerQuery = query.ToLowerInvariant();
 
         // Use a manual loop and ValueTuple to avoid LINQ allocations and ensure stable sort
-        var results = new List<(T Item, double Score, int Index)>();
+        // Pre-allocate results list to reduce re-allocations
+        int capacity = items is ICollection<T> col ? col.Count : 16;
+        var results = new List<(T Item, double Score, int Index)>(capacity);
         int index = 0;
 
         foreach (var item in items)

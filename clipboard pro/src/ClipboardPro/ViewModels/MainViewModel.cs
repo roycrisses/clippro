@@ -43,6 +43,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isMonitoringPaused;
 
+    private CancellationTokenSource? _searchCts;
+
     public MainViewModel(AppDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -98,40 +100,65 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSearchQueryChanged(string value)
     {
-        ApplyFilters();
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+        _searchCts = new CancellationTokenSource();
+        _ = ApplyFiltersAsync(_searchCts.Token);
     }
 
-    private async void ApplyFilters()
+    private async Task ApplyFiltersAsync(CancellationToken ct)
     {
-        var query = _dbContext.Clippings.AsQueryable();
-
-        // Apply filter - extract values before using in LINQ
-        if (SelectedFilter == "Favorites")
+        try
         {
-            query = query.Where(c => c.IsFavorite);
-        }
-        else if (SelectedFilter.StartsWith("App:"))
-        {
-            var appName = SelectedFilter.Substring(4);
-            query = query.Where(c => c.SourceApp == appName);
-        }
-        else if (SelectedFilter.StartsWith("Project:") && int.TryParse(SelectedFilter.Substring(8), out int projId))
-        {
-            query = query.Where(c => c.ProjectId == projId);
-        }
+            // Debounce for 300ms
+            await Task.Delay(300, ct);
 
-        var clippings = await query
-            .OrderByDescending(c => c.Timestamp)
-            .Take(500)
-            .ToListAsync();
+            var query = _dbContext.Clippings.AsQueryable();
 
-        // Apply fuzzy search
-        if (!string.IsNullOrWhiteSpace(SearchQuery))
-        {
-            clippings = FuzzySearch.Search(clippings, SearchQuery, c => c.Content).ToList();
+            // Apply filter - extract values before using in LINQ
+            string currentFilter = SelectedFilter;
+            if (currentFilter == "Favorites")
+            {
+                query = query.Where(c => c.IsFavorite);
+            }
+            else if (currentFilter.StartsWith("App:"))
+            {
+                var appName = currentFilter.Substring(4);
+                query = query.Where(c => c.SourceApp == appName);
+            }
+            else if (currentFilter.StartsWith("Project:") && int.TryParse(currentFilter.Substring(8), out int projId))
+            {
+                query = query.Where(c => c.ProjectId == projId);
+            }
+
+            var clippings = await query
+                .OrderByDescending(c => c.Timestamp)
+                .Take(500)
+                .ToListAsync(ct);
+
+            // Apply fuzzy search on a background thread to keep UI responsive
+            string currentSearch = SearchQuery;
+            if (!string.IsNullOrWhiteSpace(currentSearch))
+            {
+                clippings = await Task.Run(() => FuzzySearch.Search(clippings, currentSearch, c => c.Content), ct);
+            }
+
+            if (!ct.IsCancellationRequested)
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    Clippings = new ObservableCollection<Clipping>(clippings);
+                });
+            }
         }
-
-        Clippings = new ObservableCollection<Clipping>(clippings);
+        catch (OperationCanceledException)
+        {
+            // Expected when a new search query is typed rapidly
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"ApplyFilters Error: {ex.Message}");
+        }
     }
 
     [RelayCommand]
@@ -260,6 +287,9 @@ public partial class MainViewModel : ObservableObject
     public void SetFilter(string filter)
     {
         SelectedFilter = filter;
-        ApplyFilters();
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+        _searchCts = new CancellationTokenSource();
+        _ = ApplyFiltersAsync(_searchCts.Token);
     }
 }
